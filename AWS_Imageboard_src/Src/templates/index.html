@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ site_name }} - {{ site_subtitle }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+{% macro pagelink() %}{% if page and page > 1 %}?page={{ page }}{% endif %}{% endmacro %}
+
+{% macro render_post(post, is_op, thread_op_id) %}
+<div class="post {{ 'op' if is_op else 'reply' }}" id="p{{ post.id }}">
+  <div class="postHeader">
+    {% if is_op and post.subject %}<span class="subject">{{ post.subject }}</span>{% endif %}
+    <span class="name">{{ post.name }}</span>
+    <span class="dateTime">{{ post.created_at }}</span>
+    <a href="#p{{ post.id }}" class="postNoLink">No.{{ post.id }}</a>
+    <a href="#p{{ post.id }}" class="quoteBtn" data-pid="{{ post.id }}" data-thread="{{ thread_op_id }}">[Reply]</a>
+  </div>
+
+  {% if post.backlinks %}
+  <div class="backlinks">
+    {% for b in post.backlinks %}<a href="#p{{ b }}" class="quotelink">&gt;&gt;{{ b }}</a>{% if not loop.last %} {% endif %}{% endfor %}
+  </div>
+  {% endif %}
+
+  {% if post.image %}
+  <div class="fileInfo">
+    File: <a href="{{ url_for('uploaded_file', filename=post.image) }}" target="_blank" rel="noopener">{{ post.image }}</a>
+    ({{ (post.image_size / 1024) | round(1) }} KB, {{ post.image_w }}x{{ post.image_h }}{% if post.image_name %}, {{ post.image_name }}{% endif %})
+  </div>
+  <a href="{{ url_for('uploaded_file', filename=post.image) }}" target="_blank" rel="noopener" class="thumbLink">
+    <img src="{{ url_for('uploaded_thumb', filename=post.image) }}" class="thumb" alt="attached image" loading="lazy">
+  </a>
+  {% endif %}
+
+  <div class="comment">{{ post.comment_html | safe }}</div>
+
+  <form method="POST" action="{{ url_for('index') }}{{ pagelink() }}" class="delForm">
+    <input type="hidden" name="action" value="delete">
+    <input type="hidden" name="post_id" value="{{ post.id }}">
+    <input type="password" name="password" placeholder="pass" size="6" class="delPass">
+    <input type="submit" value="Del" class="delBtn" onclick="return confirm('Delete this post?');">
+  </form>
+</div>
+{% endmacro %}
+
+<div id="topBanner">
+  <div class="siteTitle">{{ site_name }}</div>
+  <div class="boardSubtitle">{{ site_subtitle }}</div>
+</div>
+
+<hr class="divider">
+
+{% if error and reply_to is none %}
+<div class="errorBox">Error: {{ error }}</div>
+{% endif %}
+
+<div id="postFormWrap">
+<form method="POST" action="{{ url_for('index') }}{{ pagelink() }}" enctype="multipart/form-data" class="postForm">
+  <input type="hidden" name="thread_id" value="">
+  <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off">
+  <table class="postTable">
+    <tr><td class="postblock">Name</td><td><input type="text" name="name" size="28" maxlength="75" value="{% if reply_to is none %}{{ form_values.get('name','') }}{% endif %}"></td></tr>
+    <tr><td class="postblock">Email</td><td><input type="text" name="email" size="28" maxlength="75" value="{% if reply_to is none %}{{ form_values.get('email','') }}{% endif %}"> <span class="hint">("sage" replies without bumping)</span></td></tr>
+    <tr><td class="postblock">Subject</td><td><input type="text" name="subject" size="24" maxlength="100" value="{% if reply_to is none %}{{ form_values.get('subject','') }}{% endif %}"> <input type="submit" value="New Thread"></td></tr>
+    <tr><td class="postblock">Comment</td><td><textarea name="comment" rows="5" cols="48">{% if reply_to is none %}{{ form_values.get('comment','') }}{% endif %}</textarea></td></tr>
+    <tr><td class="postblock">File</td><td><input type="file" name="file" accept=".jpg,.jpeg,.png,.gif,.webp"></td></tr>
+  </table>
+</form>
+</div>
+
+<hr class="divider">
+
+{% if total_pages > 1 %}
+<div class="pageNav">
+  Page:
+  {% for p in range(1, total_pages + 1) %}
+    {% if p == page %}<strong>[{{ p }}]</strong>{% else %}<a href="{{ url_for('index') }}?page={{ p }}">[{{ p }}]</a>{% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if not threads %}
+<p class="noThreads">No threads yet. Start one above.</p>
+{% endif %}
+
+{% for thread in threads %}
+<div class="thread" id="t{{ thread.op.id }}">
+
+  {{ render_post(thread.op, true, thread.op.id) }}
+
+  {% if thread.replies %}
+  <div class="replyContainer">
+    {% for r in thread.replies %}
+      {{ render_post(r, false, thread.op.id) }}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if error and reply_to == thread.op.id %}
+  <div class="errorBox">Error: {{ error }}</div>
+  {% endif %}
+
+  <form method="POST" action="{{ url_for('index') }}{{ pagelink() }}" enctype="multipart/form-data" class="replyForm">
+    <input type="hidden" name="thread_id" value="{{ thread.op.id }}">
+    <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off">
+    <table class="postTable">
+      <tr><td class="postblock">Name</td><td><input type="text" name="name" size="20" maxlength="75" value="{% if reply_to == thread.op.id %}{{ form_values.get('name','') }}{% endif %}"></td></tr>
+      <tr><td class="postblock">Email</td><td><input type="text" name="email" size="20" maxlength="75" value="{% if reply_to == thread.op.id %}{{ form_values.get('email','') }}{% endif %}"></td></tr>
+      <tr><td class="postblock">Comment</td><td><textarea name="comment" rows="3" cols="40" class="replyTextarea" data-thread="{{ thread.op.id }}">{% if reply_to == thread.op.id %}{{ form_values.get('comment','') }}{% endif %}</textarea></td></tr>
+      <tr><td class="postblock">File</td><td><input type="file" name="file" accept=".jpg,.jpeg,.png,.gif,.webp"> <input type="submit" value="Reply"></td></tr>
+    </table>
+  </form>
+
+  <div class="replyCount">{{ thread.reply_count }} repl{{ 'y' if thread.reply_count == 1 else 'ies' }}</div>
+</div>
+<hr class="threadDivider">
+{% endfor %}
+
+{% if total_pages > 1 %}
+<div class="pageNav">
+  Page:
+  {% for p in range(1, total_pages + 1) %}
+    {% if p == page %}<strong>[{{ p }}]</strong>{% else %}<a href="{{ url_for('index') }}?page={{ p }}">[{{ p }}]</a>{% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="footer">{{ site_name }} &mdash; IM GOING FUCKING INSANE OGHH MY GODDD</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
